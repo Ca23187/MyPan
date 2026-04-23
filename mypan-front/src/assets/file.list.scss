@@ -1,0 +1,200 @@
+.top {
+    margin-top: 20px;
+
+    .top-op {
+        display: flex;
+        align-items: center;
+
+        .btn {
+            margin-right: 10px;
+        }
+
+        .search-panel {
+            margin-left: 10px;
+            width: 300px;
+        }
+
+        .icon-refresh {
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .not-allow {
+            background: #d2d2d2 !important;
+            cursor: not-allowed;
+        }
+    }
+}
+
+.file-list {
+  .file-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0px;
+
+    /* ✅ 默认：文件名不可点击 */
+    .file-name {
+      cursor: default;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .file-name * {
+      cursor: inherit; /* ✅ 跟随 file-name（别一刀切 default） */
+    }
+
+    /* ✅ 可点击：由模板加 .clickable 决定 */
+    .file-name.clickable,
+    .file-name.clickable * {
+      cursor: pointer;
+    }
+    .file-name.clickable:hover,
+    .file-name.clickable:hover * {
+      color: #06a7ff;
+    }
+
+    /* ✅ 只有操作按钮是可点 */
+    .op .iconfont {
+      cursor: pointer;
+    }
+
+    /* 你原有的状态样式保持不变 */
+    .transfer-status {
+      font-size: 13px;
+      margin-left: 10px;
+      color: #e6a23c;
+    }
+    .transfer-fail {
+      color: #f75000;
+    }
+
+    /* edit-panel 你原有的保持 */
+    .edit-panel {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      margin: 0px 5px;
+
+      .iconfont {
+        margin-left: 10px;
+        background: #0c95f7;
+        color: #fff;
+        padding: 3px 5px;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+
+      .not-allow {
+        cursor: not-allowed;
+        background: #7cb1d7;
+        color: #ddd;
+        text-decoration: none;
+      }
+    }
+
+    .op {
+      margin-left: auto;
+      display: inline-flex;
+      justify-content: flex-end;
+      align-items: center;
+      column-gap: 4px;
+      white-space: nowrap;
+
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.12s ease;
+    }
+
+    &:hover .op {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .op .iconfont {
+      font-size: 13px;
+      color: #06a7ff;
+      margin-left: 0;
+
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+
+      padding: 4px 8px;
+      border-radius: 8px;
+      user-select: none;
+      line-height: 1;
+      transition: background-color 0.12s ease, transform 0.08s ease;
+    }
+
+    .op .iconfont:hover {
+      background: rgba(60, 64, 67, 0.08);
+    }
+
+    .op .iconfont:active {
+      background: rgba(60, 64, 67, 0.14);
+      transform: translateY(0.5px);
+    }
+
+    .op .iconfont::before {
+      margin-right: 1px;
+    }
+
+    .op .iconfont.danger {
+      color: #d93025;
+    }
+    .op .iconfont.danger:hover {
+      background: rgba(217, 48, 37, 0.12);
+    }
+    .op .iconfont.danger:active {
+      background: rgba(217, 48, 37, 0.18);
+      transform: translateY(0.5px);
+    }
+  }
+}
+
+.file-item:hover .op {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+// justify-content 设置主轴上的子元素排列方式
+// align-content 设置侧轴上的子元素的排列方式（多行）
+.no-data {
+    // vh就是当前屏幕可见高度的1%
+    // height:100vh == height:100%;
+    // calc(100vh - 150px)表示整个浏览器窗口高度减去150px的大小
+    height: calc(100vh - 150px);
+    display: flex;
+    // align-items 设置侧轴上的子元素的排列方式（单行）
+    align-items: center;
+    // 设置主轴上的子元素排列方式
+    justify-content: center;
+
+    .no-data-inner {
+        text-align: center;
+
+        .tips {
+            margin-top: 10px;
+        }
+
+        .op-list {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+
+            .op-item {
+                cursor: pointer;
+                width: 100px;
+                height: 100px;
+                margin: 0px 10px;
+                padding: 5px 0px;
+                background: rgb(241, 241, 241);
+            }
+        }
+    }
+}

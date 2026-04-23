@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPeriod="10 minutes">
+
+    <!-- 兜底：如果 yml 没配 logging.file.path，就默认 ./logs -->
+    <springProperty scope="context" name="LOG_PATH" source="logging.file.path" defaultValue="./logs"/>
+    <!-- 可选：用应用名做文件名（没配就 fallback） -->
+    <springProperty scope="context" name="APP_NAME" source="spring.application.name" defaultValue="app"/>
+
+    <property name="LOG_FILE_NAME" value="${APP_NAME}.log"/>
+    <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS,Asia/Shanghai} [%p][%c] %m%n"/>
+
+    <appender name="stdout" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <charset>utf-8</charset>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="file" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/${LOG_FILE_NAME}</file>
+
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/${LOG_FILE_NAME}.%d{yyyyMMdd}.%i</fileNamePattern>
+            <maxFileSize>20MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>2GB</totalSizeCap>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
+        </rollingPolicy>
+
+        <encoder>
+            <charset>utf-8</charset>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+
+        <append>true</append>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="stdout"/>
+        <appender-ref ref="file"/>
+    </root>
+
+</configuration>

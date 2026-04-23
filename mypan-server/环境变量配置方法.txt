@@ -1,0 +1,8 @@
+根据.env.example配置自己的.env
+
+idea启动：
+1. 下载EnvFile插件
+Add a new or select existing Run/Debug configuration,
+switch to 'EnvFile' tab,
+enable 'EnvFile' checkbox,
+click on '+' sign to add a file
