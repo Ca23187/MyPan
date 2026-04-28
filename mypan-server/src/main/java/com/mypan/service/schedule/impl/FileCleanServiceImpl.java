@@ -66,28 +66,26 @@ public class FileCleanServiceImpl implements FileCleanService {
             try { Files.deleteIfExists(coverTmpPath); } catch (Exception ignored) {}
 
             // 3) 视频切片目录：.../file/<noSuffix>/
-            if (StringUtils.hasText(base)) {
-                Path segmentsDir = fileRoot.resolve(base);
-                Path tmpSegmentsDir = fileRoot.resolve(base + ".__tmp__");
-                // 3.1 目录整体删掉（最彻底）
-                try {
-                    if (Files.exists(tmpSegmentsDir)) {
-                        FileUtils.deleteDirectory(tmpSegmentsDir.toFile());
-                    }
-                } catch (Exception ignored) {}
-                try {
-                    if (Files.exists(segmentsDir)) {
-                        FileUtils.deleteDirectory(segmentsDir.toFile());
-                    }
-                } catch (Exception e) {
-                    log.warn("cleanupLocalFileArtifacts delete segmentsDir failed: {}", segmentsDir, e);
-
-                    // 3.2 如果目录删不掉（可能被占用），至少把里面残留的文件清掉兜底
-                    try (Stream<Path> s = Files.walk(segmentsDir)) {
-                        s.filter(Files::isRegularFile)
-                                .forEach(p -> { try { Files.deleteIfExists(p); } catch (Exception ignored) {} });
-                    } catch (Exception ignored) {}
+            Path segmentsDir = fileRoot.resolve(base);
+            Path tmpSegmentsDir = fileRoot.resolve(base + ".__tmp__");
+            // 3.1 目录整体删掉（最彻底）
+            try {
+                if (Files.exists(tmpSegmentsDir)) {
+                    FileUtils.deleteDirectory(tmpSegmentsDir.toFile());
                 }
+            } catch (Exception ignored) {}
+            try {
+                if (Files.exists(segmentsDir)) {
+                    FileUtils.deleteDirectory(segmentsDir.toFile());
+                }
+            } catch (Exception e) {
+                log.warn("cleanupLocalFileArtifacts delete segmentsDir failed: {}", segmentsDir, e);
+
+                // 3.2 如果目录删不掉（可能被占用），至少把里面残留的文件清掉兜底
+                try (Stream<Path> s = Files.walk(segmentsDir)) {
+                    s.filter(Files::isRegularFile)
+                            .forEach(p -> { try { Files.deleteIfExists(p); } catch (Exception ignored) {} });
+                } catch (Exception ignored) {}
             }
         }
         if (type == FileTypeEnum.AUDIO) {

@@ -28,6 +28,8 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Stream;
 
 @Service
@@ -108,6 +110,9 @@ public class FileTranscodeServiceImpl implements FileTranscodeService {
                 if (isMinioEnabled()) {
                     try (InputStream in = Files.newInputStream(coverPath)) {
                         oss().save(coverKey, in, Files.size(coverPath), null);
+                    } catch (Exception e) {
+                        try { oss().delete(coverKey); } catch (Exception ignored) {}
+                        throw new BusinessException(ResponseCodeEnum.INTERNAL_ERROR);
                     }
                 }
 
@@ -117,25 +122,33 @@ public class FileTranscodeServiceImpl implements FileTranscodeService {
                 boolean coverCreated = AudioTools.extractCover(localInput, coverPath);
                 if (!coverCreated) return;
 
-                if (isMinioEnabled()) {
-                    try (InputStream in = Files.newInputStream(coverPath)) {
-                        oss().save(cover, in, Files.size(coverPath), Constants.AUDIO_COVER_TYPE);
-                    }
-                }
-
                 String thumbKey = cover.replace(".", "_.");
                 Path thumbPath = targetRoot.resolve(thumbKey);
                 boolean thumbCreated = ThumbnailTools.createThumbnail(coverPath, Constants.THUMBNAIL_WIDTH, thumbPath, false);
                 if (!thumbCreated) FileUtils.copyFile(coverPath.toFile(), thumbPath.toFile());
 
+                List<String> uploadedKeys = new ArrayList<>();
                 if (isMinioEnabled()) {
-                    try (InputStream in = Files.newInputStream(thumbPath)) {
-                        oss().save(thumbKey, in, Files.size(thumbPath), "image/png");
+                    try {
+                        try (InputStream in = Files.newInputStream(coverPath)) {
+                            oss().save(cover, in, Files.size(coverPath), Constants.AUDIO_COVER_TYPE);
+                        }
+                        uploadedKeys.add(cover);
+
+                        try (InputStream in = Files.newInputStream(thumbPath)) {
+                            oss().save(thumbKey, in, Files.size(thumbPath), "image/png");
+                        }
+                        uploadedKeys.add(thumbKey);
+
+                    } catch (Exception e) {
+                        for (String key : uploadedKeys) {
+                            try { oss().delete(key); } catch (Exception ignored) {}
+                        }
+                        throw new BusinessException(ResponseCodeEnum.INTERNAL_ERROR);
                     }
                 }
                 coverKey = thumbKey;
             }
-
         } catch (Exception e) {
             ok = false;
             log.error("transcodeFile failed, fileId={}, userId={}", fileInfo.getFileId(), fileInfo.getUserId(), e);
@@ -198,52 +211,62 @@ public class FileTranscodeServiceImpl implements FileTranscodeService {
 
     private void uploadVideoProductsToStorage(String objectKey, String fileId, Path targetRoot) {
         if (!isMinioEnabled()) return;
-        if (!StringUtils.hasText(objectKey) || !StringUtils.hasText(fileId) || targetRoot == null)
+        if (!StringUtils.hasText(objectKey) || !StringUtils.hasText(fileId) || targetRoot == null) {
             throw new BusinessException(ResponseCodeEnum.INTERNAL_ERROR);
+        }
 
         ObjectStorageService os = oss();
-        // 1) 上传封面：<noSuffix>.png
-        String base = StringTools.removeSuffix(objectKey);
-        String coverKey = base + Constants.VIDEO_COVER_SUFFIX;
-        Path coverPath = targetRoot.resolve(coverKey);
-        try (InputStream in = Files.newInputStream(coverPath)) {
-            os.save(coverKey, in, Files.size(coverPath), Constants.VIDEO_COVER_TYPE);
-        } catch (Exception e) {
-            log.error("upload video cover failed: local={}, key={}", coverPath, coverKey, e);
-            throw new BusinessException(ResponseCodeEnum.INTERNAL_ERROR);
-        }
+        List<String> uploadedKeys = new ArrayList<>();
 
-        // 2) 上传切片目录
-        Path segmentsDir = targetRoot.resolve(base); // 本地切片目录：.../file/202512/userId/fileId/
-        Path m3u8Path = segmentsDir.resolve(Constants.M3U8_NAME);
+        try {
+            String base = StringTools.removeSuffix(objectKey);
 
-        // 2.1 m3u8
-        String m3u8Key = base + "/" + Constants.M3U8_NAME;
-        try (InputStream in = Files.newInputStream(m3u8Path)) {
-            os.save(m3u8Key, in, Files.size(m3u8Path), "application/vnd.apple.mpegurl");
-        } catch (Exception e) {
-            log.error("upload m3u8 failed: local={}, key={}", m3u8Path, m3u8Key, e);
-            throw new BusinessException(ResponseCodeEnum.INTERNAL_ERROR);
-        }
+            // 1. 上传封面：<noSuffix>.png
+            String coverKey = base + Constants.VIDEO_COVER_SUFFIX;
+            Path coverPath = targetRoot.resolve(coverKey);
+            try (InputStream in = Files.newInputStream(coverPath)) {
+                os.save(coverKey, in, Files.size(coverPath), Constants.VIDEO_COVER_TYPE);
+            }
+            uploadedKeys.add(coverKey);
 
-        // 2.2 ts（fileId_0001.ts等）
-        try (Stream<Path> s = Files.list(segmentsDir)) {
-            for (Path p : s.filter(Files::isRegularFile)
-                    .filter(f -> f.getFileName().toString().toLowerCase().endsWith(".ts"))
-                    .toList()) {
-                String tsKey = base + "/" + p.getFileName();
-                try (InputStream in = Files.newInputStream(p)) {
-                    os.save(tsKey, in, Files.size(p), "video/mp2t");
-                } catch (Exception e) {
-                    log.error("upload ts failed: local={}, key={}", p, tsKey, e);
-                    throw new BusinessException(ResponseCodeEnum.INTERNAL_ERROR);
+            // 2. 上传 m3u8
+            Path segmentsDir = targetRoot.resolve(base);
+            Path m3u8Path = segmentsDir.resolve(Constants.M3U8_NAME);
+
+            String m3u8Key = base + "/" + Constants.M3U8_NAME;
+            try (InputStream in = Files.newInputStream(m3u8Path)) {
+                os.save(m3u8Key, in, Files.size(m3u8Path), "application/vnd.apple.mpegurl");
+            }
+            uploadedKeys.add(m3u8Key);
+
+            // 3. 上传 ts
+            try (Stream<Path> s = Files.list(segmentsDir)) {
+                for (Path p : s.filter(Files::isRegularFile)
+                        .filter(f -> f.getFileName().toString().toLowerCase().endsWith(".ts"))
+                        .toList()) {
+
+                    String tsKey = base + "/" + p.getFileName();
+
+                    try (InputStream in = Files.newInputStream(p)) {
+                        os.save(tsKey, in, Files.size(p), "video/mp2t");
+                    }
+
+                    uploadedKeys.add(tsKey);
                 }
             }
-        } catch (BusinessException e) {
-            throw e;
+
         } catch (Exception e) {
-            log.error("list/upload ts failed: dir={}", segmentsDir, e);
-            throw new BusinessException(ResponseCodeEnum.INTERNAL_ERROR);
+            for (String key : uploadedKeys) {
+                try {
+                    os.delete(key);
+                } catch (Exception ignored) {
+                }
+            }
+
+            log.error("upload video products failed, rollback minio objects, objectKey={}", objectKey, e);
+            throw e instanceof BusinessException
+                    ? (BusinessException) e
+                    : new BusinessException(ResponseCodeEnum.INTERNAL_ERROR);
         }
     }
 }
