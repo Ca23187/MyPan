@@ -126,14 +126,10 @@ const layout = computed(() => {
 });
 
 // 计算顶部高度
-//顶部 60 , 内容区域距离顶部 20， 内容上下内间距 15*2  分页区域高度 46
-const topHeight = 60 + 20 + 30 + 46;
-
-// 计算当前表格高度，实现页面内部滚动
 const tableHeight = ref(
   props.options.tableHeight
     ? props.options.tableHeight
-    : window.innerHeight - topHeight - props.options.extHeight
+    : window.innerHeight - props.options.extHeight
 );
 
 const init = () => {

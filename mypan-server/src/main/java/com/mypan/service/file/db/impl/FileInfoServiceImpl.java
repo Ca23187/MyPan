@@ -16,8 +16,6 @@ import com.mypan.infra.jpa.querydsl.file.FileInfoQueryDsl;
 import com.mypan.infra.jpa.querydsl.support.QueryDslUtils;
 import com.mypan.infra.jpa.repository.FileInfoRepository;
 import com.mypan.infra.mapstruct.FileInfoMapper;
-import com.mypan.infra.sse.SseHub;
-import com.mypan.infra.sse.TranscodeSseEvent;
 import com.mypan.service.dto.share.ShareAccessDto;
 import com.mypan.service.file.db.FileInfoService;
 import com.mypan.service.file.db.support.FileBatchOperationManager;
@@ -48,7 +46,6 @@ public class FileInfoServiceImpl implements FileInfoService {
     private final FileInfoRepository fileInfoRepository;
     private final AppProperties appProperties;
     private final FileInfoMapper fileInfoMapper;
-    private final SseHub sseHub;
     private final FileBatchOperationManager manager;
     private final UserInfoService userInfoService;
     private final FileTreeNavigator tree;
@@ -81,14 +78,11 @@ public class FileInfoServiceImpl implements FileInfoService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void finalizeTranscoding(String userId, String fileId, long size, String cover, int newStatus) {
-        int rows = fileInfoRepository.updateFileStatusWithOldStatus(
+        fileInfoRepository.updateFileStatusWithOldStatus(
                 fileId, userId,
                 FileStatusEnum.TRANSCODING.getStatus(),
                 size, cover, newStatus
         );
-        if (rows > 0)
-            sseHub.pushToUser(userId, new TranscodeSseEvent(
-                    "TRANSCODE_STATUS", fileId, newStatus, cover, size));
     }
 
     @Override

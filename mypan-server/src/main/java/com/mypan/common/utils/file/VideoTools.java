@@ -111,7 +111,7 @@ public final class VideoTools {
     }
 
     /**
-     * 为视频生成封面（当前暂时跳过前2秒）
+     * 为视频生成封面
      */
     public static void createCover4Video(Path sourceFile,
                                          Integer width,

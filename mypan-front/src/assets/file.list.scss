@@ -164,37 +164,40 @@
 // justify-content 设置主轴上的子元素排列方式
 // align-content 设置侧轴上的子元素的排列方式（多行）
 .no-data {
-    // vh就是当前屏幕可见高度的1%
-    // height:100vh == height:100%;
-    // calc(100vh - 150px)表示整个浏览器窗口高度减去150px的大小
-    height: calc(100vh - 150px);
-    display: flex;
-    // align-items 设置侧轴上的子元素的排列方式（单行）
-    align-items: center;
-    // 设置主轴上的子元素排列方式
-    justify-content: center;
+  height: calc(100vh - 330px);
+  min-height: 360px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 
-    .no-data-inner {
-        text-align: center;
+  .no-data-inner {
+    text-align: center;
+    transform: translateY(-20px);
 
-        .tips {
-            margin-top: 10px;
-        }
-
-        .op-list {
-            margin-top: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-
-            .op-item {
-                cursor: pointer;
-                width: 100px;
-                height: 100px;
-                margin: 0px 10px;
-                padding: 5px 0px;
-                background: rgb(241, 241, 241);
-            }
-        }
+    .tips {
+      margin-top: 10px;
     }
+
+    .sub-tips {
+      margin-top: 8px;
+      font-size: 14px;
+      color: #999;
+    }
+
+    .op-list {
+      margin-top: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+
+      .op-item {
+        cursor: pointer;
+        width: 100px;
+        height: 100px;
+        margin: 0 10px;
+        padding: 5px 0;
+        background: rgb(241, 241, 241);
+      }
+    }
+  }
 }

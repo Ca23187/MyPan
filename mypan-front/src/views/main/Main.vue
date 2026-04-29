@@ -1,5 +1,12 @@
 <template>
-  <div>
+  <div
+    class="main-drop-zone"
+    @dragover.prevent
+    @dragenter.prevent="handleDragEnter"
+    @dragleave.prevent="handleDragLeave"
+    @drop.prevent="handleDropUpload"
+  >
+    <div v-if="dragging" class="drop-mask">Release to upload files</div>
     <div class="top">
       <!-- 头部按钮处 -->
       <div class="top-op">
@@ -49,14 +56,6 @@
             <span class="iconfont icon-move"></span>
             &nbsp;Move Selected
           </el-button>
-
-          <el-tag
-            v-if="shouldWatchTranscode && !sseConnected"
-            type="warning"
-            size="small"
-          >
-            Transcode notifications disconnected. Reconnecting…
-          </el-tag>
         </div>
       </div>
     </div>
@@ -164,7 +163,12 @@
           >
             <!-- 显示文件图标 -->
             <template
-              v-if="(row.fileType == 3 || row.fileType == 1 || (row.fileType == 2 && row.fileCover)) && row.status == 2"
+              v-if="
+                (row.fileType == 3 ||
+                  row.fileType == 1 ||
+                  (row.fileType == 2 && row.fileCover)) &&
+                row.status == 2
+              "
             >
               <!-- 如果文件类型是图片或者视频,且已经成功转码,则执行 Icon中的cover -->
               <Icon :cover="row.fileCover" :width="32"></Icon>
@@ -253,7 +257,7 @@
     <!-- ✅ search 页：未点击搜索时，不显示“上传文件”那套 -->
     <div class="no-data" v-else-if="isSearch && !searchTriggered">
       <div class="no-data-inner">
-        <Icon iconName="no_data" :width="120" fit="fill"></Icon>
+        <Icon iconName="no_data" :width="100" fit="fill"></Icon>
         <div class="tips">Enter a keyword and click “Search”.</div>
       </div>
     </div>
@@ -274,6 +278,10 @@
       <div class="no-data-inner">
         <Icon iconName="no_data" :width="120" fit="fill"></Icon>
         <div class="tips">This folder is empty. Upload your first file.</div>
+        <div class="sub-tips">
+          Supports drag & drop for single or multiple files. Folder upload is
+          not supported.
+        </div>
         <div class="op-list">
           <el-upload
             :show-file-list="false"
@@ -335,207 +343,7 @@ const fromSearchToAll = ref(false);
 // ✅ all 页显示“回到搜索结果”按钮的条件：必须在 all 且来自 search
 const showBackToSearch = computed(() => isHome.value && fromSearchToAll.value);
 
-// ====================== SSE（最终版：按转码中才连接） ======================
-
-const sse = ref(null);
-const sseConnected = ref(false);
-
-let sseRetryTimer = null;
-let sseRetryCount = 0;
-let refreshOnMissTimer = null;
-
-const refreshListOnMiss = () => {
-  if (refreshOnMissTimer) return;
-  refreshOnMissTimer = setTimeout(() => {
-    refreshOnMissTimer = null;
-    loadDataList();
-  }, 800);
-};
-
-const clearSseRetry = () => {
-  if (sseRetryTimer) {
-    clearTimeout(sseRetryTimer);
-    sseRetryTimer = null;
-  }
-};
-
-const scheduleSseReconnect = async () => {
-  clearSseRetry();
-
-  // 只有需要监听转码才允许重连
-  const list = tableData.value?.list || [];
-  const hasTranscoding = list.some((row) => row.status === 0);
-  if (!hasTranscoding) return;
-
-  // 退避：1s, 2s, 4s, 8s... 最大 30s
-  sseRetryCount++;
-  const delay = Math.min(1000 * Math.pow(2, Math.min(sseRetryCount, 5)), 30000);
-
-  sseRetryTimer = setTimeout(async () => {
-    // 重连前先做一次登录探活（防 token 失效导致一直重连刷）
-    const ok = await ensureLogin();
-    if (!ok) return; // ensureLogin 内部会 gotoLogin
-
-    startSse(); // 重连
-  }, delay);
-};
-
-let lastSseMsgAt = 0;
-let sseTimeoutTimer = null;
-let redirectingToLogin = false;
-
-const stopSse = () => {
-  if (sseTimeoutTimer) {
-    clearTimeout(sseTimeoutTimer);
-    sseTimeoutTimer = null;
-  }
-
-  clearSseRetry();
-  sseRetryCount = 0;
-
-  if (!sse.value) return;
-  try {
-    sse.value.close();
-  } finally {
-    sse.value = null;
-    sseConnected.value = false;
-  }
-};
-
-const armSseTimeout = () => {
-  if (sseTimeoutTimer) clearTimeout(sseTimeoutTimer);
-  // 10 分钟没收到任何消息：提示 + 断开（避免长挂）
-  sseTimeoutTimer = setTimeout(() => {
-    proxy.Message.warning(
-      "Transcoding is taking longer than expected. Please refresh later."
-    );
-    stopSse();
-  }, 10 * 60 * 1000);
-};
-
-const startSse = () => {
-  if (sse.value) return; // 已连接就不重复连
-
-  const es = new EventSource("/api/sse/transcode", { withCredentials: true });
-  sse.value = es;
-
-  es.onopen = () => {
-    sseConnected.value = true;
-    lastSseMsgAt = Date.now();
-    sseRetryCount = 0;
-    armSseTimeout();
-  };
-
-  // 后端 subscribe() 会发 hello
-  es.addEventListener("hello", () => {
-    sseConnected.value = true;
-    lastSseMsgAt = Date.now();
-    sseRetryCount = 0;
-    armSseTimeout();
-  });
-
-  es.addEventListener("heartbeat", () => {
-    sseConnected.value = true;
-    lastSseMsgAt = Date.now();
-    sseRetryCount = 0;
-    armSseTimeout();
-  });
-
-  es.addEventListener("transcode", (e) => {
-    sseConnected.value = true;
-    lastSseMsgAt = Date.now();
-    armSseTimeout();
-
-    let msg;
-    try {
-      msg = JSON.parse(e.data);
-    } catch {
-      return;
-    }
-    if (msg.type !== "TRANSCODE_STATUS") return;
-
-    const fid = String(msg.fileId);
-
-    // 先走 Map，再兜底扫一遍（防止列表更新后 Map 未重建）
-    const row =
-      fileIndex.get(fid) ||
-      (tableData.value?.list || []).find((r) => String(r.fileId) === fid);
-
-    if (!row) {
-      refreshListOnMiss();
-      return;
-    }
-
-    if (typeof msg.status === "number") row.status = msg.status;
-    if (msg.fileCover != null) row.fileCover = msg.fileCover;
-    if (msg.fileSize != null) row.fileSize = msg.fileSize;
-
-    if (msg.status === 2 || msg.status === 1) {
-      ensureSseByTranscoding();
-    }
-  });
-
-  es.onerror = () => {
-    sseConnected.value = false;
-
-    // ✅ 主动关闭，避免浏览器内部无限自动重连
-    try {
-      es.close();
-    } catch {}
-    if (sse.value === es) sse.value = null;
-
-    // ✅ 手动退避重连（且会做 ensureLogin）
-    scheduleSseReconnect();
-  };
-};
-
-// 只在“当前列表存在转码中”时保持 SSE
-const ensureSseByTranscoding = () => {
-  const list = tableData.value?.list || [];
-  const hasTranscoding = list.some((row) => row.status === 0);
-  if (hasTranscoding) startSse();
-  else stopSse();
-};
-
-const ensureLogin = async () => {
-  const res = await proxy.Request({
-    url: "/getUserInfo",
-    method: "get",
-    showLoading: false,
-    showError: false,
-    returnError: true,
-  });
-  if (!res) {
-    // 理论上不会走到这里（除非你没开 returnError）
-    onLoginExpired("Session expired. Please sign in again.");
-    return false;
-  }
-
-  if (res.__error) {
-    if (res.code === 901 || res.code === 401) onLoginExpired(res.msg);
-    return false;
-  }
-
-  // 正常返回
-  return true;
-};
-
-const onLoginExpired = (msg) => {
-  stopSse();
-  uploaderRef.value?.abortAll?.();
-  userStore.clearUserInfo();
-  gotoLogin(msg || "Session expired. Please sign in again.");
-};
-
 const uploaderRef = ref(null);
-
-const shouldWatchTranscode = computed(() => {
-  const list = tableData.value?.list || [];
-  return list.some((r) => r.status === 0);
-});
-
-// 离开页面销毁
-onUnmounted(() => stopSse());
 
 // 维护一个“文件索引”：fileId -> row（让更新是 O(1)）
 const fileIndex = new Map();
@@ -610,9 +418,9 @@ const columns = [
 const tableData = ref({});
 // 表格选项
 const tableOptions = {
-  extHeight: 50,
+  extHeight: 240,
   selectType: "checkbox",
-};
+}
 // 转码轮询相关
 const pollingTimer = ref(null);
 
@@ -667,6 +475,7 @@ const loadDataList = async () => {
         totalCount: 0,
       };
       editing.value = false;
+      stopTranscodePolling();
       return;
     }
     if (!searchKeyword.value.trim()) {
@@ -677,6 +486,7 @@ const loadDataList = async () => {
         totalCount: 0,
       };
       editing.value = false;
+      stopTranscodePolling();
       return;
     }
 
@@ -698,8 +508,8 @@ const loadDataList = async () => {
   if (!result) return;
 
   tableData.value = result.data;
-  rebuildFileIndex(); // ✅ 每次加载完列表重建索引
-  ensureSseByTranscoding();
+  rebuildFileIndex();
+  startTranscodePolling();
   editing.value = false;
 };
 
@@ -1003,54 +813,6 @@ const navChange = (data) => {
   loadDataList();
 };
 
-// const downloadByBlob = async (downloadToken, filename = "download") => {
-//   const blob = await proxy.Request({
-//     url: api.download + "/" + downloadToken,
-//     method: "get",
-//     responseType: "blob",
-//     showLoading: true,
-//     showError: true,
-//   });
-//   if (!blob) return; // 登录失效会被拦截器处理并返回 null
-
-//   const url = window.URL.createObjectURL(blob);
-//   const a = document.createElement("a");
-//   a.href = url;
-//   a.download = filename;
-//   document.body.appendChild(a);
-//   a.click();
-//   a.remove();
-//   window.URL.revokeObjectURL(url);
-// };
-
-// // 下载文件
-// const download = async (row) => {
-//   const result = await proxy.Request({
-//     url: api.createDownloadUrl,
-//     params: { fileIds: row.fileId },
-//   });
-//   if (!result) return;
-
-//   await downloadByBlob(result.data, row.fileName || "download");
-// };
-
-// // 批量下载（文件 + 文件夹 → zip）
-// const downloadBatch = async () => {
-//   if (selectFileIdList.value.length === 0) {
-//     proxy.Message.warning("Please select files or folders first.");
-//     return;
-//   }
-
-//   const result = await proxy.Request({
-//     url: api.createDownloadUrl,
-//     params: { fileIds: selectFileIdList.value.join(",") },
-//   });
-//   if (!result) return;
-
-//   // ✅ 批量一般是 zip
-//   await downloadByBlob(result.data, "download.zip");
-// };
-
 const downloadByNavigate = (downloadToken) => {
   const url = api.download + "/" + downloadToken;
   // 用 location 最稳，不容易被浏览器拦截
@@ -1112,6 +874,8 @@ watch(
 
     // ✅ 关键：进入 search 页不立刻查
     if (newCategory === "search") {
+      stopTranscodePolling();
+
       searchTriggered.value = false;
       showLoading.value = false;
 
@@ -1193,6 +957,80 @@ const handleClear = () => {
   resetFilters();
 };
 
+const dragging = ref(false);
+const dragCounter = ref(0);
+
+const handleDragEnter = () => {
+  dragCounter.value++;
+  dragging.value = true;
+};
+
+const handleDragLeave = () => {
+  dragCounter.value--;
+
+  if (dragCounter.value <= 0) {
+    dragCounter.value = 0;
+    dragging.value = false;
+  }
+};
+
+const handleDropUpload = (e) => {
+  dragging.value = false;
+  dragCounter.value = 0;
+
+  const files = Array.from(e.dataTransfer?.files || []);
+  if (files.length === 0) return;
+
+  files.forEach((file) => {
+    addFile({ file });
+  });
+};
+
+const hasTranscodingFile = () => {
+  return (tableData.value?.list || []).some((row) => Number(row.status) === 0);
+};
+
+const stopTranscodePolling = () => {
+  if (pollingTimer.value) {
+    clearInterval(pollingTimer.value);
+    pollingTimer.value = null;
+  }
+};
+
+const startTranscodePolling = () => {
+  if (!hasTranscodingFile()) {
+    stopTranscodePolling();
+    return;
+  }
+
+  if (pollingTimer.value) return;
+
+  pollingTimer.value = setInterval(() => {
+    if (!hasTranscodingFile()) {
+      stopTranscodePolling();
+      return;
+    }
+
+    showLoading.value = false;
+    loadDataList();
+  }, 5000);
+};
+
+onMounted(() => {
+  window.addEventListener("dragover", preventDefault);
+  window.addEventListener("drop", preventDefault);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("dragover", preventDefault);
+  window.removeEventListener("drop", preventDefault);
+  stopTranscodePolling();
+});
+
+const preventDefault = (e) => {
+  e.preventDefault();
+};
+
 defineExpose({ reload });
 </script>
 
@@ -1263,5 +1101,24 @@ defineExpose({ reload });
   margin-top: 8px;
   font-size: 14px;
   color: #999;
+}
+
+.main-drop-zone {
+  min-height: 100%;
+}
+
+.drop-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(64, 158, 255, 0.12);
+  border: 3px dashed #409eff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 600;
+  color: #409eff;
+  pointer-events: none;
 }
 </style>
