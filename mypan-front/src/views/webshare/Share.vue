@@ -220,9 +220,9 @@ const columns = [
 
 const tableData = ref({});
 const tableOptions = {
-  extHeight: 80,
+  extHeight: 240,
   selectType: "checkbox",
-};
+}
 
 const goMyPan = () => {
   router.push("/main/all");

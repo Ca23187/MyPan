@@ -116,9 +116,9 @@ const columns = [
 const tableData = ref({});
 // 表格选项
 const tableOptions = {
-  extHeight: 20,
+  extHeight: 240,
   selectType: "checkbox",
-};
+}
 
 // 获得数据;
 const loadDataList = async () => {

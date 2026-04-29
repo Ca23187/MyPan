@@ -99,9 +99,9 @@ const columns = [
 ];
 const tableData = ref({});
 const tableOptions = {
-  extHeight: 20,
+  extHeight: 240,
   selectType: "checkbox",
-};
+}
 
 const loadDataList = async () => {
   let params = {

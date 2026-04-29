@@ -275,7 +275,10 @@ const columns = [
 
 const searchFormData = ref({});
 const tableData = ref({});
-const tableOptions = { extHeight: 20 };
+const tableOptions = {
+  extHeight: 240,
+  selectType: "checkbox",
+}
 
 const resetSearch = () => {
   // 清空查询条件

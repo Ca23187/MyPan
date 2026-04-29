@@ -242,9 +242,9 @@ const tableData = ref({
 
 // 表格选项
 const tableOptions = {
-  extHeight: 50,
+  extHeight: 240,
   selectType: "checkbox",
-};
+}
 const showLoading = ref(true);
 
 // 当前文件夹
