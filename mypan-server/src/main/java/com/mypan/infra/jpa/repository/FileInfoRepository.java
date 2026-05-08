@@ -19,7 +19,8 @@ public interface FileInfoRepository extends JpaRepository<FileInfo, FileInfoId> 
         update FileInfo f
         set f.fileSize = :fileSize,
             f.fileCover = :fileCover,
-            f.status = :newStatus
+            f.status = :newStatus,
+            f.lastModifiedAt = CURRENT_TIMESTAMP
         where f.fileId = :fileId
           and f.userId = :userId
           and f.status = :oldStatus
@@ -78,7 +79,7 @@ public interface FileInfoRepository extends JpaRepository<FileInfo, FileInfoId> 
 
     List<FileInfo> findByUserIdAndFilePidInAndDelFlag(String userId, List<String> filePids, Integer delFlag);
 
-    @Query("update FileInfo f set f.delFlag = :delFlag where f.userId = :userId")
+    @Query("update FileInfo f set f.delFlag = :delFlag, f.lastModifiedAt = CURRENT_TIMESTAMP where f.userId = :userId")
     @Modifying
     void updateDelFlagByUserId(Integer delFlag, String userId);
 

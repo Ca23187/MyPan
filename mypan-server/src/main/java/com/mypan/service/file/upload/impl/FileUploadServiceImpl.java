@@ -213,12 +213,6 @@ public class FileUploadServiceImpl implements FileUploadService {
         try {
             UserSpaceDto spaceDto = redisComponent.getUserSpaceInfo(userId);
 
-            // 配额校验（按临时累计）
-            Long currentTempSize = redisComponent.getUploadTotalSize(userId, fileId);
-            if (file.getSize() + currentTempSize + spaceDto.getUsedSpace() > spaceDto.getTotalSpace()) {
-                throw new BusinessException(ResponseCodeEnum.STORAGE_INSUFFICIENT);
-            }
-
             // MinIO 分支
             if (isMinioEnabled()) {
                 return handleMinioMultipartUpload(
@@ -238,9 +232,12 @@ public class FileUploadServiceImpl implements FileUploadService {
             // 1) 分片落盘
             saveChunkToTempFolder(file, chunkIndex, tempFileFolder);
 
-            // 2) 更新临时 size
+            // 2) 更新临时 size 并校验配额
             Long total = redisComponent.recordUploadChunkSize(userId, fileId, chunkIndex, file.getSize());
             if (total == null) throw new BusinessException(ResponseCodeEnum.INTERNAL_ERROR);
+            if (spaceDto.getUsedSpace() + total > spaceDto.getTotalSpace()) {
+                throw new BusinessException(ResponseCodeEnum.STORAGE_INSUFFICIENT);
+            }
 
             // 3) 每一片都尝试推进到 “落库+合并”
             //    - 未齐：直接 uploading
